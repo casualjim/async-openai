@@ -26,6 +26,11 @@ realtime = ["dep:tokio-tungstenite"]
 # Bring your own types
 byot = []
 
+reqwest-middleware-rustls = ["reqwest-middleware/rustls-tls"]
+reqwest-middleware-charset = ["reqwest-middleware/charset"]
+reqwest-middleware-http2 = ["reqwest-middleware/http2"]
+
+
 [dependencies]
 async-openai-macros = { path = "../async-openai-macros", version = "0.1.0" }
 backoff = { version = "0.4.0", features = ["tokio"] }
@@ -37,11 +42,13 @@ reqwest = { version = "0.12.12", features = [
   "stream",
   "multipart",
 ], default-features = false }
-reqwest-eventsource = "0.6.0"
+reqwest-middleware-eventsource = { git = "https://github.com/casualjim/reqwest-eventsource", branch = "reqwest-middleware" }
+reqwest-middleware = { version = "0.4.0", features = ["json", "multipart"] }
+
 serde = { version = "1.0.217", features = ["derive", "rc"] }
 serde_json = "1.0.135"
 thiserror = "2.0.11"
-tokio = { version = "1.43.0", features = ["fs", "macros"] }
+tokio = { version = "1.45.0", features = ["fs", "macros"] }
 tokio-stream = "0.1.17"
 tokio-util = { version = "0.7.13", features = ["codec", "io-util"] }
 tracing = "0.1.41"

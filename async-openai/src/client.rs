@@ -1,14 +1,19 @@
-use std::pin::Pin;
+use std::{pin::Pin, time::Duration};
 
 use bytes::Bytes;
 use futures::{stream::StreamExt, Stream};
 use reqwest::multipart::Form;
 use reqwest_middleware_eventsource::{Event, EventSource, RequestBuilderExt};
+use reqwest_retry::RetryTransientMiddleware;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     config::{Config, OpenAIConfig},
+<<<<<<< HEAD
     error::{map_deserialization_error, ApiError, OpenAIError, WrappedError},
+=======
+    error::{map_deserialization_error, OpenAIError},
+>>>>>>> 5c84aa0 (replace backoff with reqwest-retru)
     file::Files,
     image::Images,
     moderation::Moderations,
@@ -23,7 +28,6 @@ use crate::{
 pub struct Client<C: Config> {
     http_client: reqwest_middleware::ClientWithMiddleware,
     config: C,
-    backoff: backoff::ExponentialBackoff,
 }
 
 impl Client<OpenAIConfig> {
@@ -35,24 +39,26 @@ impl Client<OpenAIConfig> {
 
 impl<C: Config> Client<C> {
     /// Create client with a custom HTTP client, OpenAI config, and backoff.
-    pub fn build(
-        http_client: reqwest_middleware::ClientWithMiddleware,
-        config: C,
-        backoff: backoff::ExponentialBackoff,
-    ) -> Self {
+    pub fn build(http_client: reqwest_middleware::ClientWithMiddleware, config: C) -> Self {
         Self {
             http_client,
             config,
-            backoff,
         }
     }
 
     /// Create client with [OpenAIConfig] or [crate::config::AzureConfig]
     pub fn with_config(config: C) -> Self {
         Self {
-            http_client: reqwest_middleware::ClientBuilder::new(reqwest::Client::new()).build(),
+            http_client: reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
+                .with(RetryTransientMiddleware::new_with_policy(
+                    reqwest_retry::policies::ExponentialBackoff::builder()
+                        .base(2)
+                        .jitter(reqwest_retry::Jitter::Full)
+                        .retry_bounds(Duration::from_millis(500), Duration::from_secs(60))
+                        .build_with_total_retry_duration(Duration::from_secs(900)),
+                ))
+                .build(),
             config,
-            backoff: Default::default(),
         }
     }
 
@@ -64,12 +70,6 @@ impl<C: Config> Client<C> {
         http_client: reqwest_middleware::ClientWithMiddleware,
     ) -> Self {
         self.http_client = http_client;
-        self
-    }
-
-    /// Exponential backoff for retrying [rate limited](https://platform.openai.com/docs/guides/rate-limits) requests.
-    pub fn with_backoff(mut self, backoff: backoff::ExponentialBackoff) -> Self {
-        self.backoff = backoff;
         self
     }
 
@@ -329,14 +329,11 @@ impl<C: Config> Client<C> {
     {
         let client = self.http_client.clone();
 
-        backoff::future::retry(self.backoff.clone(), || async {
-            let request = request_maker().await.map_err(backoff::Error::Permanent)?;
-            let response = client
-                .execute(request)
-                .await
-                .map_err(OpenAIError::from)
-                .map_err(backoff::Error::Permanent)?;
+        let request = request_maker().await?;
+        let response = client.execute(request).await.map_err(OpenAIError::from)?;
+        let bytes = response.bytes().await.map_err(OpenAIError::Reqwest)?;
 
+<<<<<<< HEAD
             let status = response.status();
             let bytes = response
                 .bytes()
@@ -386,6 +383,9 @@ impl<C: Config> Client<C> {
             Ok(bytes)
         })
         .await
+=======
+        Ok(bytes)
+>>>>>>> 5c84aa0 (replace backoff with reqwest-retru)
     }
 
     /// Execute a HTTP request and retry on rate limit

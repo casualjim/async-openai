@@ -6,7 +6,7 @@ use bytes::Bytes;
 use futures::{stream::StreamExt, Stream};
 use reqwest::{header::HeaderMap, multipart::Form, Response};
 #[cfg(not(target_family = "wasm"))]
-use reqwest_eventsource::{Error as EventSourceError, Event, EventSource, RequestBuilderExt};
+use reqwest_middleware_eventsource::{Error as EventSourceError, Event, EventSource, RequestBuilderExt};
 use serde::{de::DeserializeOwned, Serialize};
 
 #[cfg(not(target_family = "wasm"))]
@@ -17,6 +17,16 @@ use crate::{
     traits::AsyncTryFrom,
     RequestOptions,
 };
+
+#[cfg(not(target_family = "wasm"))]
+type HttpClient = reqwest_middleware::ClientWithMiddleware;
+#[cfg(target_family = "wasm")]
+type HttpClient = reqwest::Client;
+
+#[cfg(not(target_family = "wasm"))]
+type HttpRequestBuilder = reqwest_middleware::RequestBuilder;
+#[cfg(target_family = "wasm")]
+type HttpRequestBuilder = reqwest::RequestBuilder;
 
 #[cfg(feature = "administration")]
 use crate::admin::Admin;
@@ -69,7 +79,7 @@ use crate::Videos;
 /// Client is a container for config, backoff and http_client
 /// used to make API calls.
 pub struct Client<C: Config> {
-    http_client: reqwest::Client,
+    http_client: HttpClient,
     config: C,
     #[cfg(not(target_family = "wasm"))]
     backoff: backoff::ExponentialBackoff,
@@ -81,7 +91,16 @@ where
 {
     fn default() -> Self {
         Self {
-            http_client: reqwest::Client::new(),
+            http_client: {
+                #[cfg(not(target_family = "wasm"))]
+                {
+                    reqwest_middleware::ClientWithMiddleware::from(reqwest::Client::new())
+                }
+                #[cfg(target_family = "wasm")]
+                {
+                    reqwest::Client::new()
+                }
+            },
             config: C::default(),
             #[cfg(not(target_family = "wasm"))]
             backoff: Default::default(),
@@ -100,13 +119,14 @@ impl<C: Config> Client<C> {
     /// Create client with a custom HTTP client, OpenAI config, and backoff.
     #[cfg(not(target_family = "wasm"))]
     pub fn build(
-        http_client: reqwest::Client,
+        http_client: reqwest_middleware::ClientWithMiddleware,
         config: C,
         backoff: backoff::ExponentialBackoff,
     ) -> Self {
         Self {
             http_client,
             config,
+            #[cfg(not(target_family = "wasm"))]
             backoff,
         }
     }
@@ -123,7 +143,16 @@ impl<C: Config> Client<C> {
     /// Create client with [OpenAIConfig] or [crate::config::AzureConfig]
     pub fn with_config(config: C) -> Self {
         Self {
-            http_client: reqwest::Client::new(),
+            http_client: {
+                #[cfg(not(target_family = "wasm"))]
+                {
+                    reqwest_middleware::ClientBuilder::new(reqwest::Client::new()).build()
+                }
+                #[cfg(target_family = "wasm")]
+                {
+                    reqwest::Client::new()
+                }
+            },
             config,
             #[cfg(not(target_family = "wasm"))]
             backoff: Default::default(),
@@ -132,7 +161,20 @@ impl<C: Config> Client<C> {
 
     /// Provide your own [client] to make HTTP requests with.
     ///
+    /// [client]: HttpClient
+    #[cfg(not(target_family = "wasm"))]
+    pub fn with_http_client(
+        mut self,
+        http_client: reqwest_middleware::ClientWithMiddleware,
+    ) -> Self {
+        self.http_client = http_client;
+        self
+    }
+
+    /// Provide your own [client] to make HTTP requests with (WASM).
+    ///
     /// [client]: reqwest::Client
+    #[cfg(target_family = "wasm")]
     pub fn with_http_client(mut self, http_client: reqwest::Client) -> Self {
         self.http_client = http_client;
         self
@@ -144,7 +186,6 @@ impl<C: Config> Client<C> {
         self.backoff = backoff;
         self
     }
-
     // API groups
 
     /// To call [Models] group related APIs using this client.
@@ -297,7 +338,7 @@ impl<C: Config> Client<C> {
         method: reqwest::Method,
         path: &str,
         request_options: &RequestOptions,
-    ) -> reqwest::RequestBuilder {
+    ) -> HttpRequestBuilder {
         let mut request_builder = if let Some(path) = request_options.path() {
             self.http_client
                 .request(method, self.config.url(path.as_str()))
@@ -481,7 +522,7 @@ impl<C: Config> Client<C> {
             .build_request_builder(reqwest::Method::POST, path, request_options)
             .multipart(<Form as AsyncTryFrom<F>>::try_from(form.clone()).await?);
 
-        let response = request_builder.send().await.map_err(OpenAIError::Reqwest)?;
+        let response = request_builder.send().await.map_err(OpenAIError::from)?;
 
         // Check for error status
         if !response.status().is_success() {
@@ -552,37 +593,35 @@ impl<C: Config> Client<C> {
             let response = client
                 .execute(request)
                 .await
-                .map_err(OpenAIError::Reqwest)
+                .map_err(OpenAIError::from)
                 .map_err(backoff::Error::Permanent)?;
 
             let status = response.status();
 
             match read_response(response).await {
                 Ok((bytes, headers)) => Ok((bytes, headers)),
-                Err(e) => {
-                    match e {
-                        OpenAIError::ApiError(api_error) => {
-                            if status.is_server_error() {
-                                Err(backoff::Error::Transient {
-                                    err: OpenAIError::ApiError(api_error),
-                                    retry_after: None,
-                                })
-                            } else if status.as_u16() == 429
-                                && api_error.r#type != Some("insufficient_quota".to_string())
-                            {
-                                // Rate limited retry...
-                                tracing::warn!("Rate limited: {}", api_error.message);
-                                Err(backoff::Error::Transient {
-                                    err: OpenAIError::ApiError(api_error),
-                                    retry_after: None,
-                                })
-                            } else {
-                                Err(backoff::Error::Permanent(OpenAIError::ApiError(api_error)))
-                            }
+                Err(e) => match e {
+                    OpenAIError::ApiError(api_error) => {
+                        if status.is_server_error() {
+                            Err(backoff::Error::Transient {
+                                err: OpenAIError::ApiError(api_error),
+                                retry_after: None,
+                            })
+                        } else if status.as_u16() == 429
+                            && api_error.r#type != Some("insufficient_quota".to_string())
+                        {
+                            // Rate limited retry...
+                            tracing::warn!("Rate limited: {}", api_error.message);
+                            Err(backoff::Error::Transient {
+                                err: OpenAIError::ApiError(api_error),
+                                retry_after: None,
+                            })
+                        } else {
+                            Err(backoff::Error::Permanent(OpenAIError::ApiError(api_error)))
                         }
-                        _ => Err(backoff::Error::Permanent(e)),
                     }
-                }
+                    _ => Err(backoff::Error::Permanent(e)),
+                },
             }
         })
         .await

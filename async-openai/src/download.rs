@@ -3,11 +3,10 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::error::OpenAIError;
 use base64::{engine::general_purpose, Engine as _};
 use rand::{distr::Alphanumeric, Rng};
 use reqwest::Url;
-
-use crate::error::OpenAIError;
 
 fn create_paths<P: AsRef<Path>>(url: &Url, base_dir: P) -> (PathBuf, PathBuf) {
     let mut dir = PathBuf::from(base_dir.as_ref());

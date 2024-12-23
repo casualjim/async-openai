@@ -2,8 +2,10 @@
 //!
 //! ## Creating client
 //!
-//! ```
-//! use async_openai::{Client, config::OpenAIConfig};
+//! ```no_run
+//! # #[cfg(feature = "_api")]
+//! # {
+//! use async_openai::{config::OpenAIConfig, Client};
 //!
 //! // Create a OpenAI client with api key from env var OPENAI_API_KEY and default base url.
 //! let client = Client::new();
@@ -21,14 +23,21 @@
 //! let client = Client::with_config(config);
 //!
 //! // Use custom reqwest client
-//! let http_client = reqwest::ClientBuilder::new().user_agent("async-openai").build().unwrap();
+//! let inner = reqwest::Client::builder()
+//!     .user_agent("async-openai")
+//!     .build()
+//!     .unwrap();
+//! let http_client = reqwest_middleware::ClientBuilder::new(inner).build();
 //! let client = Client::new().with_http_client(http_client);
+//! # }
 //! ```
 //!
 //!
 //! ## Making requests
 //!
-//!```
+//!```no_run
+//!# #[cfg(feature = "responses")]
+//!# {
 //!# tokio_test::block_on(async {
 //! use async_openai::{Client, types::responses::{CreateResponseArgs}};
 //!
@@ -52,6 +61,7 @@
 //! println!("{:?}", response.output_text());
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! # });
+//!# }
 //!```
 //!
 //! ## Bring Your Own Types
@@ -59,8 +69,9 @@
 //! To use custom types for inputs and outputs, enable `byot` feature which provides additional generic methods with same name and `_byot` suffix.
 //! This feature is available on methods whose return type is not `Bytes`
 //!
-//!```
-//!# #[cfg(feature = "byot")]
+//!```no_run
+//!# #[cfg(all(feature = "byot", feature = "chat-completion"))]
+//!# {
 //!# tokio_test::block_on(async {
 //! use async_openai::Client;
 //! use serde_json::{Value, json};
@@ -90,14 +101,16 @@
 //!  }
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! # });
+//!# }
 //!```
 //!
 //! **References: Borrow Instead of Move**
 //!
 //! With `byot` use reference to request types
 //!
-//! ```
-//! # #[cfg(feature = "byot")]
+//! ```no_run
+//! # #[cfg(all(feature = "byot", feature = "responses"))]
+//! # {
 //! # tokio_test::block_on(async {
 //! # use async_openai::{Client, types::responses::{CreateResponse, Response}};
 //! # let client = Client::new();
@@ -107,6 +120,7 @@
 //!   .create_byot(&request).await?;
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! # });
+//! # }
 //! ```
 //!
 //! ## Rust Types
@@ -128,7 +142,9 @@
 //! Certain individual APIs that need additional query or header parameters - these can be provided by chaining `.query()`, `.header()`, `.headers()` on the API group.
 //!
 //! For example:
-//! ```
+//! ```no_run
+//! # #[cfg(feature = "chat-completion")]
+//! # {
 //! # tokio_test::block_on(async {
 //! # use async_openai::Client;
 //! # use async_openai::traits::RequestOptionsBuilder;
@@ -143,6 +159,7 @@
 //!   .await?;
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! # });
+//! # }
 //! ```
 //!
 //! **All Requests**
@@ -158,7 +175,9 @@
 //! In addition to `.query()`, `.header()`, `.headers()` a path for individual request can be changed by using `.path()`, method on the API group.
 //!
 //! For example:
-//! ```
+//! ```no_run
+//! # #[cfg(feature = "chat-completion")]
+//! # {
 //! # tokio_test::block_on(async {
 //! # use async_openai::{Client, types::chat::CreateChatCompletionRequestArgs};
 //! # use async_openai::traits::RequestOptionsBuilder;
@@ -175,6 +194,7 @@
 //!   .await?;
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! # });
+//! # }
 //! ```
 //!
 //! **Dynamic Dispatch**
@@ -185,8 +205,10 @@
 //! trait object, then create a client with `Box` or `Arc` wrapped configuration.
 //!
 //! For example:
-//! ```
-//! use async_openai::{Client, config::{Config, OpenAIConfig}};
+//! ```no_run
+//! # #[cfg(feature = "_api")]
+//! # {
+//! use async_openai::{config::{Config, OpenAIConfig}, Client};
 //!
 //! // Use `Box` or `std::sync::Arc` to wrap the config
 //! let config = Box::new(OpenAIConfig::default()) as Box<dyn Config>;
@@ -198,12 +220,15 @@
 //! fn chat_completion(client: &Client<Box<dyn Config>>) {
 //!     todo!()
 //! }
+//! # }
 //! ```
 //!
 //! ## Microsoft Azure
 //!
-//! ```
-//! use async_openai::{Client, config::AzureConfig};
+//! ```no_run
+//! # #[cfg(feature = "_api")]
+//! # {
+//! use async_openai::{config::AzureConfig, Client};
 //!
 //! let config = AzureConfig::new()
 //!     .with_api_base("https://my-resource-name.openai.azure.com")
@@ -216,6 +241,7 @@
 //! // Note that `async-openai` only implements OpenAI spec
 //! // and doesn't maintain parity with the spec of Azure OpenAI service.
 //!
+//! # }
 //! ```
 //!
 //!

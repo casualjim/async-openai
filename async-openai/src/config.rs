@@ -285,7 +285,6 @@ impl AzureConfig {
 impl Config for AzureConfig {
     fn headers(&self) -> HeaderMap {
         let mut headers = HeaderMap::new();
-
         headers.insert("api-key", self.api_key.expose_secret().parse().unwrap());
 
         headers

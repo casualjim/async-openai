@@ -8,6 +8,9 @@ pub enum OpenAIError {
     /// Underlying error from reqwest library after an API call was made
     #[error("http error: {0}")]
     Reqwest(#[from] reqwest::Error),
+    /// Underlying error from reqwest library after an API call was made
+    #[error("http error: {0}")]
+    ReqwestMiddleware(reqwest_middleware::Error),
     /// OpenAI returns error object with details of API call failure
     #[error("{0}")]
     ApiError(ApiError),
@@ -27,6 +30,22 @@ pub enum OpenAIError {
     /// or when builder fails to build request before making API call
     #[error("invalid args: {0}")]
     InvalidArgument(String),
+}
+
+#[cfg(all(feature = "_api", not(target_family = "wasm")))]
+impl From<reqwest_middleware::Error> for OpenAIError {
+    fn from(err: reqwest_middleware::Error) -> Self {
+        match err {
+            reqwest_middleware::Error::Middleware(err) => {
+                if let Some(api_error) = err.downcast_ref::<ApiError>() {
+                    OpenAIError::ApiError(api_error.clone())
+                } else {
+                    OpenAIError::ReqwestMiddleware(reqwest_middleware::Error::Middleware(err))
+                }
+            }
+            reqwest_middleware::Error::Reqwest(err) => OpenAIError::Reqwest(err),
+        }
+    }
 }
 
 // no streaming support for wasm yet
@@ -71,9 +90,9 @@ impl std::error::Error for OpenAIError {}
 #[cfg(all(feature = "_api", not(target_family = "wasm")))]
 #[derive(Debug, thiserror::Error)]
 pub enum StreamError {
-    /// Underlying error from reqwest_eventsource library when reading the stream
+    /// Underlying error from reqwest-middleware-eventsource library when reading the stream
     #[error("{0}")]
-    ReqwestEventSource(#[from] reqwest_eventsource::Error),
+    ReqwestEventSource(#[from] reqwest_middleware_eventsource::Error),
     /// Error when a stream event does not match one of the expected values
     #[error("Unknown event: {0:#?}")]
     UnknownEvent(eventsource_stream::Event),

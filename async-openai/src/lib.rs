@@ -21,7 +21,7 @@
 //! let client = Client::with_config(config);
 //!
 //! // Use custom reqwest client
-//! let http_client = reqwest::ClientBuilder::new().user_agent("async-openai").build().unwrap();
+//! let http_client = reqwest_middleware::ClientBuilder::new().user_agent("async-openai").build().unwrap();
 //! let client = Client::new().with_http_client(http_client);
 //! ```
 //!

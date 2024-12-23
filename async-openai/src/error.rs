@@ -6,6 +6,9 @@ pub enum OpenAIError {
     /// Underlying error from reqwest library after an API call was made
     #[error("http error: {0}")]
     Reqwest(#[from] reqwest::Error),
+    /// Underlying error from reqwest library after an API call was made
+    #[error("http error: {0}")]
+    ReqwestMiddleware(reqwest_middleware::Error),
     /// OpenAI returns error object with details of API call failure
     #[error("{0}")]
     ApiError(ApiError),
@@ -25,6 +28,21 @@ pub enum OpenAIError {
     /// or when builder fails to build request before making API call
     #[error("invalid args: {0}")]
     InvalidArgument(String),
+}
+
+impl From<reqwest_middleware::Error> for OpenAIError {
+    fn from(err: reqwest_middleware::Error) -> Self {
+        match err {
+            reqwest_middleware::Error::Middleware(err) => {
+                if let Some(api_error) = err.downcast_ref::<ApiError>() {
+                    OpenAIError::ApiError(api_error.clone())
+                } else {
+                    OpenAIError::ReqwestMiddleware(reqwest_middleware::Error::Middleware(err))
+                }
+            }
+            reqwest_middleware::Error::Reqwest(err) => OpenAIError::Reqwest(err),
+        }
+    }
 }
 
 /// OpenAI API returns error object on failure

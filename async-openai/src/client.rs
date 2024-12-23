@@ -2,7 +2,7 @@ use std::pin::Pin;
 
 use bytes::Bytes;
 use futures::{stream::StreamExt, Stream};
-use reqwest_eventsource::{Event, EventSource, RequestBuilderExt};
+use reqwest_middleware_eventsource::{Event, EventSource, RequestBuilderExt};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -19,7 +19,7 @@ use crate::{
 /// Client is a container for config, backoff and http_client
 /// used to make API calls.
 pub struct Client<C: Config> {
-    http_client: reqwest::Client,
+    http_client: reqwest_middleware::ClientWithMiddleware,
     config: C,
     backoff: backoff::ExponentialBackoff,
 }
@@ -34,7 +34,7 @@ impl Client<OpenAIConfig> {
 impl<C: Config> Client<C> {
     /// Create client with a custom HTTP client, OpenAI config, and backoff.
     pub fn build(
-        http_client: reqwest::Client,
+        http_client: reqwest_middleware::ClientWithMiddleware,
         config: C,
         backoff: backoff::ExponentialBackoff,
     ) -> Self {
@@ -48,7 +48,7 @@ impl<C: Config> Client<C> {
     /// Create client with [OpenAIConfig] or [crate::config::AzureConfig]
     pub fn with_config(config: C) -> Self {
         Self {
-            http_client: reqwest::Client::new(),
+            http_client: reqwest_middleware::ClientBuilder::new(reqwest::Client::new()).build(),
             config,
             backoff: Default::default(),
         }
@@ -56,8 +56,11 @@ impl<C: Config> Client<C> {
 
     /// Provide your own [client] to make HTTP requests with.
     ///
-    /// [client]: reqwest::Client
-    pub fn with_http_client(mut self, http_client: reqwest::Client) -> Self {
+    /// [client]: reqwest_middleware::ClientWithMiddleware
+    pub fn with_http_client(
+        mut self,
+        http_client: reqwest_middleware::ClientWithMiddleware,
+    ) -> Self {
         self.http_client = http_client;
         self
     }
@@ -319,7 +322,7 @@ impl<C: Config> Client<C> {
             let response = client
                 .execute(request)
                 .await
-                .map_err(OpenAIError::Reqwest)
+                .map_err(OpenAIError::from)
                 .map_err(backoff::Error::Permanent)?;
 
             let status = response.status();

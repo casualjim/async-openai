@@ -1,10 +1,9 @@
 use std::path::{Path, PathBuf};
 
-use base64::{engine::general_purpose, Engine as _};
-use rand::{distributions::Alphanumeric, Rng};
-use reqwest::Url;
-
 use crate::error::OpenAIError;
+use base64::{engine::general_purpose, Engine as _};
+use rand::prelude::*;
+use reqwest::Url;
 
 fn create_paths<P: AsRef<Path>>(url: &Url, base_dir: P) -> (PathBuf, PathBuf) {
     let mut dir = PathBuf::from(base_dir.as_ref());
@@ -57,8 +56,8 @@ pub(crate) async fn download_url<P: AsRef<Path>>(
 }
 
 pub(crate) async fn save_b64<P: AsRef<Path>>(b64: &str, dir: P) -> Result<PathBuf, OpenAIError> {
-    let filename: String = rand::thread_rng()
-        .sample_iter(&Alphanumeric)
+    let filename: String = rand::rng()
+        .sample_iter(&rand::distr::Alphanumeric)
         .take(10)
         .map(char::from)
         .collect();

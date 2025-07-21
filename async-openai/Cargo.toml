@@ -33,17 +33,17 @@ reqwest-middleware-http2 = ["reqwest-middleware/http2"]
 
 [dependencies]
 async-openai-macros = { path = "../async-openai-macros", version = "0.1.0" }
-backoff = { version = "0.4.0", features = ["tokio"] }
+backon = { version = "1", features = ["tokio"] }
 base64 = "0.22.1"
 futures = "0.3.31"
-rand = "0.8.5"
+rand = "0.9.2"
 reqwest = { version = "0.12.12", features = [
   "json",
   "stream",
   "multipart",
 ], default-features = false }
 reqwest-middleware-eventsource = { git = "https://github.com/casualjim/reqwest-eventsource", branch = "reqwest-middleware" }
-reqwest-middleware = { version = "0.4.0", features = ["json", "multipart"] }
+reqwest-middleware = { version = "0.4.2", features = ["json", "multipart"] }
 reqwest-retry = { version = "0.7" }
 
 
@@ -58,7 +58,7 @@ derive_builder = "0.20.2"
 secrecy = { version = "0.10.3", features = ["serde"] }
 bytes = "1.9.0"
 eventsource-stream = "0.2.3"
-tokio-tungstenite = { version = "0.26.1", optional = true, default-features = false }
+tokio-tungstenite = { version = "0.27.0", optional = true, default-features = false }
 
 [dev-dependencies]
 tokio-test = "0.4.4"
